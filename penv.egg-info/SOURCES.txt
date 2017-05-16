@@ -1,0 +1,6 @@
+penv.egg-info/PKG-INFO
+penv.egg-info/SOURCES.txt
+penv.egg-info/dependency_links.txt
+penv.egg-info/entry_points.txt
+penv.egg-info/requires.txt
+penv.egg-info/top_level.txt
