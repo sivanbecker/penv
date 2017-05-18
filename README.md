@@ -1,8 +1,7 @@
 Private ENV CLI (click based):
 -----------------------------
 
-how to run and commands available:
-
+package includes LDAP and TMUX stuff.
 once the package was installed using pip ( package name = penv)
 
 - p dhcpldap --username < > --password <> --lab <if different from Infi1> ldap_to_yml --raw --ofile
