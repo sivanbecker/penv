@@ -1,4 +1,4 @@
 
        [console_scripts]
-       penv=penv.scripts.entry_point:cli
+       p=penv.scripts.entry_point:cli
     

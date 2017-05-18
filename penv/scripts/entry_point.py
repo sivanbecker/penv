@@ -16,7 +16,7 @@ def cli(ctx):
 def tmux():
     pass
 
-from ..ldap import ldap as ldap_group
+from ..ldap import dhcpldap as ldap_group
 cli.add_command(ldap_group)
 
 
