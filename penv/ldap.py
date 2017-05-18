@@ -178,8 +178,8 @@ class Ldap(object):
         return report_str
 
 @click.group()
-@click.option('--username', help='username for LDAP access', required=True)
-@click.option('--password', help='password for LDAP access', required=True)
+@click.option('-u', '--username', help='username for LDAP access', required=True)
+@click.option('-p', '--password', help='password for LDAP access', required=True)
 @click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
 @click.pass_context
 def dhcpldap(ctx, username, password, lab):
