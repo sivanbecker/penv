@@ -15,26 +15,26 @@ class Ldap(object):
 
         # Default Values
         self.hosts = {
-            'INFI1': 'dhcp-prod01',
-            'TELAD': 'dhcp-telad-01',
-            'GDC': 'dhcp-prod01',
-            'NW': 'dhcp-nw-01',
-            'WT': 'dhcp-wt-01'
+            'infi1': 'dhcp-prod01',
+            'telad': 'dhcp-telad-01',
+            'gdc': 'dhcp-prod01',
+            'nw': 'dhcp-nw-01',
+            'wt': 'dhcp-wt-01'
             }
 
         self.basedns = {
-            'INFI1': 'dc=infinidat,dc=com',
-            'TELAD': 'dc=telad',
-            'GDC': 'dc=infinidat,dc=com',
-            'NW': 'dc=nw,dc=infinidat,dc=com',
-            'WT': 'dc=wt,dc=infinidat,dc=com'
+            'infi1': 'dc=infinidat,dc=com',
+            'telad': 'dc=telad,dc=infinidat,dc=com',
+            'gdc': 'dc=infinidat,dc=com',
+            'nw': 'dc=nw,dc=infinidat,dc=com',
+            'wt': 'dc=wt,dc=us,dc=infinidat,dc=com'
             }
         self.labs = {
-            'telad': [self.hosts['TELAD'],self.basedns['TELAD']],
-            'infi1': [self.hosts['INFI1'],self.basedns['INFI1']],
-            'gdc': [self.hosts['GDC'],self.basedns['GDC']],
-            'needham': [self.hosts['NW'],self.basedns['NW']],
-            'wt': [self.hosts['WT'],self.basedns['WT']]
+            'telad': [self.hosts['telad'],self.basedns['telad']],
+            'infi1': [self.hosts['infi1'],self.basedns['infi1']],
+            'gdc': [self.hosts['gdc'],self.basedns['gdc']],
+            'nw': [self.hosts['nw'],self.basedns['nw']],
+            'wt': [self.hosts['wt'],self.basedns['wt']]
 
             }
         # HOST_INFI1 = ''
@@ -61,8 +61,10 @@ class Ldap(object):
         self.lab = None
         self.basedn = None
         self.host = None
+        self.username = None
+        self.password = None
 
-    def connect(self, lab, username, password):
+    def connect(self, lab):
         if lab.lower() not in self.labs:
             click.secho("Lab %s is not a valid option" % lab, fg='red')
             raise click.UsageError("Please only use next option for --lab: %s" % list(self.labs.keys()))
@@ -70,6 +72,8 @@ class Ldap(object):
             self.lab = lab
             self.host =  self.labs[self.lab.lower()][0]
             self.basedn = self.labs[self.lab.lower()][1]
+
+        click.secho('Connecting LDAP in lab %s' % lab, fg='blue')
 
         ldapi = "ldap://" + self.host + ":389"
         ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
@@ -80,19 +84,18 @@ class Ldap(object):
         self.ldap.set_option(ldap.OPT_X_TLS_DEMAND, False)
         self.ldap.set_option(ldap.OPT_DEBUG_LEVEL, 255)
 
-        binddn = "cn=" + username + "," + self.basedn
-
+        binddn = "cn=" + self.username + "," + self.basedns[self.lab.lower()]
         try:
-            self.ldap.simple_bind_s(binddn, password)
+            self.ldap.simple_bind_s(binddn, self.password)
         except ldap.INVALID_CREDENTIALS:
-            print("Your username or password is incorrect.")
-            sys.exit()
+            click.secho("Your username or password is incorrect.", fg='red')
+            click.Abort()
         except ldap.LDAPError as e:
             if type(e.message) == dict and e.message.has_key('desc'):
-                print(e.message['desc'])
+                click.secho(e.message['desc'], fg='red')
             else:
-                print(e)
-                sys.exit()
+                click.echo(e)
+                click.exit
 
 
     def pull_dhcp_data(self):
@@ -177,28 +180,33 @@ class Ldap(object):
                 # print(m, mac_dict[m])
         return report_str
 
+
+
 @click.group()
 @click.option('-u', '--username', help='username for LDAP access', required=True)
 @click.option('-p', '--password', help='password for LDAP access', required=True)
-@click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
 @click.pass_context
-def dhcpldap(ctx, username, password, lab):
-    click.secho('Connecting LDAP for lab %s' % lab, fg='blue')
+def dhcpldap(ctx, username, password):
+
     ctx.obj = Ldap()
-    ctx.obj.connect(lab, username, password)
+    ctx.obj.username = username
+    ctx.obj.password = password
+    # ctx.obj.connect(lab)
+
 
 @dhcpldap.command()
 @click.option('--elem', default='raw', help='host/system/ip/mac')
+@click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
 @click.option('--raw/--no-raw', default=False, help='Process data for dhcpawn')
 @click.option('--quick/--no-quick', default=True, help='if used ,a quick copy from ldap to dhcpawn DB is done')
 @click.option('--sample/--no-sample', default=False, help='meant for testing ,will only return 10 records from ldap to see the output is right')
 @click.option('--ofile', help='output file to which ldap data is written')
 @click.pass_obj
-def ldap_to_yml(ldaph, elem, raw, sanity, quick, ofile, sample):
+def ldap_to_yml(ldaph, lab, elem, raw, sanity, quick, ofile, sample):
     if raw and not ofile:
         click.secho("Please also provide an output file ", fg='red')
         raise click.Abort()
-
+    ldaph.connect(lab)
     click.secho('Retrieving LDAP raw data', fg='green')
     ldap_raw_data = ldaph.pull_dhcp_data()
     with open(ofile, 'w') as f:
@@ -207,9 +215,11 @@ def ldap_to_yml(ldaph, elem, raw, sanity, quick, ofile, sample):
 
 @dhcpldap.command()
 @click.option('--ofile', default=None, help='output file to which ldap data is written')
+@click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
 @click.pass_obj
-def sanity_report(ldaph, ofile):
+def sanity_report(ldaph, lab, ofile):
 
+    ldaph.connect(lab)
     click.secho('Retrieving LDAP raw data', fg='green')
     ldap_raw_data = ldaph.pull_dhcp_data()
 
@@ -222,3 +232,56 @@ def sanity_report(ldaph, ofile):
         click.secho('Sanity report availble in %s' % ofile, fg='green')
     else:
         print(report_str)
+
+
+##### LDAP SEARCH
+
+def search_in_lab(ldaph, lab, st):
+
+    ldaph.connect(lab)
+    click.secho('Retrieving LDAP raw data from %s' % lab, fg='green')
+    data = ldaph.pull_dhcp_data()
+
+    dhcp_dict = dict()
+
+    for e in data:
+        if st in str(e):
+            if 'dhcpHWAddress' in e[1]:
+                mac = e[1]['dhcpHWAddress'][0].split()[1]
+            else:
+                mac = "NA"
+
+            if 'dhcpStatements' in e[1]:
+                ip = e[1]['dhcpStatements'][0].split()[1]
+            else:
+                ip = "NA"
+
+            dhcp_dict[e[1]['cn'][0]] = [mac, ip]
+
+    return dhcp_dict
+
+@dhcpldap.command()
+@click.option('-l', '--lab', default=None, help='which ldap to search')
+@click.argument('st')
+@click.pass_obj
+def ldap_search(ldaph, st, lab):
+
+    dhcp_dict = dict()
+
+    if lab:
+        # click.secho('Searching for %s in %s' % (str, lab), fg='green' )
+        dhcp_dict[lab] = search_in_lab(ldaph, lab, st )
+    else:
+        for l in ldaph.labs.keys():
+            # click.secho('Searching for %s in %s' % (str, l), fg='green' )
+            dhcp_dict[l] = search_in_lab(ldaph,l, st)
+            if not dhcp_dict[l]:
+                click.secho('nothing found in %s' % l, fg='yellow' )
+
+    for l in dhcp_dict:
+        # since infi1 and gdc will give the same data
+        # filter gdc when infi1 is incleded
+        if l=='gdc' and 'infi1' in dhcp_dict and 'gdc' in dhcp_dict:
+            break
+        for component in dhcp_dict[l]:
+            print("(%s) %s -> %s" % (l, component, dhcp_dict[l][component]))
