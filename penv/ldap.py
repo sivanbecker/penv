@@ -201,12 +201,9 @@ def ldap_to_yml(ldaph, elem, raw, sanity, quick, ofile, sample):
 
     click.secho('Retrieving LDAP raw data', fg='green')
     ldap_raw_data = ldaph.pull_dhcp_data()
-    if raw:
-        with open(ofile, 'w') as f:
-            f.write(ldaph.process_raw(ldap_raw_data, sanity, quick, sample))
-            click.secho("Data is ready in %s" % ofile, fg='blue')
-    elif sanity:
-        ldaph.sanity_report(ldap_raw_data)
+    with open(ofile, 'w') as f:
+        f.write(ldaph.process_raw(ldap_raw_data, sanity, quick, sample))
+        click.secho("Data is ready in %s" % ofile, fg='blue')
 
 @dhcpldap.command()
 @click.option('--ofile', default=None, help='output file to which ldap data is written')
