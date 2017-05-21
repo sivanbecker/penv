@@ -4,12 +4,9 @@ import click
 import ldap
 import json
 import requests
-
+from requests.exceptions import ConnectionError
 
 class Ldap(object):
-
-
-
 
     def __init__(self):
 
@@ -37,25 +34,6 @@ class Ldap(object):
             'wt': [self.hosts['wt'],self.basedns['wt']]
 
             }
-        # HOST_INFI1 = ''
-        # HOST_TELAD = 'dhcp-telad-01'
-        # HOST_GDC = HOST_INFI1
-        # HOST_NW = 'dhcp-nw-01'
-        # HOST_WT = 'dhcp-wt-01'
-
-        # BASEDN_INFI1 = 'dc=infinidat,dc=com'
-        # BASEDN_GDC = BASEDN_INFI1
-        # BASEDN_TELAD = ','.join(['dc=telad', BASEDN_INFI1])
-        # BASEDN_NW = ','.join(['dc=nw', BASEDN_INFI1])
-        # BASEDN_WT = ','.join(['dc=wt', BASEDN_INFI1])
-
-        # LABS = {
-        #     'telad': [self.hosts['TELAD'],self.basedns['TELAD']],
-        #     'infi1': [HOST_INFI1, BASEDN_INFI1],
-        #     'gdc': [HOST_GDC, BASEDN_GDC],
-        #     'needham': [HOST_NW, BASEDN_NW],
-        #     'wt':[HOST_WT, BASEDN_WT]
-        # }
 
         self.ldap = None
         self.lab = None
@@ -106,7 +84,7 @@ class Ldap(object):
 
         return self.ldap.search_s(self.basedn, ldap.SCOPE_SUBTREE, '(objectClass=*)')
 
-    def process_raw(self, data, sanity=False, quick=False, sample=False):
+    def process_raw(self, data, quick=False, sample=False, sanity=False):
         """
         method for taking raw data from ldap and
         disect to smaller pieces.
@@ -114,7 +92,9 @@ class Ldap(object):
         counter = 0
         hosts_str = ''
         if quick:
-            cmd_str = "- url: /api/multiple_register/\n"+" "*2 +"data: " + " " +"{\n" + " "*8 + "\"deploy\": \"False\",\n" + " "*8 + "\"quick\": \"True\",\n"
+            cmd_str = "- url: /api/multiple_register/\n"+" "*2 +"data: " + \
+                      " " +"{\n" + " "*8 + "\"deploy\": \"False\",\n" + " "*8 + \
+                      "\"quick\": \"True\",\n"
         else:
             cmd_str = "- url: /api/multiple_register/\n"+" "*2 +"data: " + " " +"{\n"
 
@@ -134,22 +114,28 @@ class Ldap(object):
                             if not ip in ip_dict:
                                 ip_dict[ip] = []
                             data = json.dumps({'ip':ip })
-                            subnet = requests.get('http://127.0.0.1:5000/api/subnets/query_subnet_from_ip/', data=data).text
+                            try:
+                                subnet = requests.get('http://127.0.0.1:5000/api/subnets/query_subnet_from_ip/', data=data).text
+                            except ConnectionError as e:
+                                click.secho('Please check cob testserver is running on localhost port 5000', fg='red')
+                                raise click.Abort()
+
                             if 'Bad Request' in subnet:
                                 continue
                         else:
                             ip = None
 
                         if ip:
-                            hosts_str += "h"+str(counter) + ": " + "{hostname: \"%s\", mac: \"%s\", group: \"%s\", subnet: %s, ip: \"%s\", deployed: False },\n" \
+                            hosts_str += "h"+str(counter) + ": " + \
+                                         "{hostname: \"%s\", mac: \"%s\", group: \"%s\", subnet: %s, ip: \"%s\", deployed: False },\n" \
                                          % (hostname, mac, group_name, subnet.strip(), ip) + " "*9
 
                             ip_dict[ip].append(hostname)
                             mac_dict[mac].append(hostname)
                         else:
-                            hosts_str += "h" + str(
-                                counter) + ": " + "{hostname: \"%s\", mac: \"%s\", group: \"%s\", deployed: False },\n" \
-                                % (hostname, mac, group_name) + " " * 9
+                            hosts_str += "h" + str(counter) + ": " + \
+                                         "{hostname: \"%s\", mac: \"%s\", group: \"%s\", deployed: False },\n" \
+                                         % (hostname, mac, group_name) + " " * 9
                             mac_dict[mac].append(hostname)
 
                         counter += 1
@@ -165,7 +151,7 @@ class Ldap(object):
     def sanity_report(self, data):
 
         report_str = ''
-        ip_dict, mac_dict = self.process_raw(data, True, False)
+        ip_dict, mac_dict = self.process_raw(data, True, False, True)
         report_str += "IP DUPS\n"
         # print("IP DUPS")
         for i in ip_dict:
@@ -198,11 +184,11 @@ def dhcpldap(ctx, username, password):
 @click.option('--elem', default='raw', help='host/system/ip/mac')
 @click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
 @click.option('--raw/--no-raw', default=False, help='Process data for dhcpawn')
-@click.option('--quick/--no-quick', default=True, help='if used ,a quick copy from ldap to dhcpawn DB is done')
+@click.option('--quick/--no-quick', default=False, help='if used ,a quick copy from ldap to dhcpawn DB is done')
 @click.option('--sample/--no-sample', default=False, help='meant for testing ,will only return 10 records from ldap to see the output is right')
 @click.option('--ofile', help='output file to which ldap data is written')
 @click.pass_obj
-def ldap_to_yml(ldaph, lab, elem, raw, sanity, quick, ofile, sample):
+def ldap_to_yml(ldaph, lab, elem, raw, quick, ofile, sample):
     if raw and not ofile:
         click.secho("Please also provide an output file ", fg='red')
         raise click.Abort()
@@ -210,7 +196,7 @@ def ldap_to_yml(ldaph, lab, elem, raw, sanity, quick, ofile, sample):
     click.secho('Retrieving LDAP raw data', fg='green')
     ldap_raw_data = ldaph.pull_dhcp_data()
     with open(ofile, 'w') as f:
-        f.write(ldaph.process_raw(ldap_raw_data, sanity, quick, sample))
+        f.write(ldaph.process_raw(ldap_raw_data, quick, sample))
         click.secho("Data is ready in %s" % ofile, fg='blue')
 
 @dhcpldap.command()
