@@ -4,6 +4,7 @@ import click
 import ldap
 import json
 import requests
+import yaml
 from requests.exceptions import ConnectionError
 
 class Ldap(object):
@@ -180,6 +181,13 @@ def dhcpldap(ctx, username, password):
     # ctx.obj.connect(lab)
 
 
+@click.group()
+@click.option('-y','--yaml', help='path to YAML file')
+@click.pass_context
+def yml(ctx, yaml):
+    ctx.obj = yaml
+
+
 @dhcpldap.command()
 @click.option('--elem', default='raw', help='host/system/ip/mac')
 @click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
@@ -198,6 +206,49 @@ def ldap_to_yml(ldaph, lab, elem, raw, quick, ofile, sample):
     with open(ofile, 'w') as f:
         f.write(ldaph.process_raw(ldap_raw_data, quick, sample))
         click.secho("Data is ready in %s" % ofile, fg='blue')
+
+
+
+######## YAML SPLITTING
+def write_small_yml(fname, info):
+    with open(fname, 'w') as fh:
+                click.secho("Creating %s" % fname, fg='blue')
+                fh.write(yaml.dump(info))
+
+@yml.command()
+@click.option('-n', '--number', default=500, help='number of max ldap records in each of the yaml files to be created')
+@click.pass_obj
+def split_yml(ymlctx, number):
+    """
+    split a yaml file into smaller yaml files so that i can
+    populate all ldap records to dockerized dhcpawn
+    number - how many ldap records i would like to have in each yaml file (default = 500 )
+    ymlctx - this is the context of the yml click group
+    """
+    with open(ymlctx, 'r') as y:
+        click.secho("Loading YAML", fg='green')
+        loaded = yaml.load(y)
+
+    url = loaded[0]['url']
+    record_count = 0
+    file_count = 0
+    name = "ymlcmd"
+    small_yml = [dict()]
+    small_yml[0].setdefault('url', url)
+    small_yml[0].setdefault('data',{})
+    for rec in loaded[0]['data']:
+        record_count += 1
+        small_yml[0]['data'].update({rec: loaded[0]['data'][rec]})
+        if record_count > 500:
+            # we get 500 records ,create a file and move to the next one
+            write_small_yml("%s%s.yml" % (name, str(file_count)), small_yml)
+            small_yml[0]['data'] = {} # clear data part
+            file_count += 1
+            record_count = 0 # start counting all over again
+
+    if small_yml[0]['data']:
+        # incase we have less then 500 records but we reached the end of the main yml
+        write_small_yml("%s%s.yml" % (name, str(file_count)), small_yml)
 
 @dhcpldap.command()
 @click.option('--ofile', default=None, help='output file to which ldap data is written')
