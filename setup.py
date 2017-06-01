@@ -9,6 +9,7 @@ setup(
     install_requires=[
         'Click',
         'pyldap',
+        'pyyaml',
         ],
     entry_points='''
        [console_scripts]

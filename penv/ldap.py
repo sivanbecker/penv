@@ -5,6 +5,7 @@ import ldap
 import json
 import requests
 import yaml
+from ipaddress import IPv4Address, IPv4Network, summarize_address_range
 from requests.exceptions import ConnectionError
 
 class Ldap(object):
@@ -93,11 +94,11 @@ class Ldap(object):
         counter = 0
         hosts_str = ''
         if quick:
-            cmd_str = "- url: /api/multiple_register/\n"+" "*2 +"data: " + \
+            cmd_str = "- url: /register/multiple_register/\n"+" "*2 +"data: " + \
                       " " +"{\n" + " "*8 + "\"deploy\": \"False\",\n" + " "*8 + \
                       "\"quick\": \"True\",\n"
         else:
-            cmd_str = "- url: /api/multiple_register/\n"+" "*2 +"data: " + " " +"{\n"
+            cmd_str = "- url: /register/multiple_register/\n"+" "*2 +"data: " + " " +"{\n"
 
         mac_dict = dict()
         ip_dict = dict()
@@ -116,7 +117,7 @@ class Ldap(object):
                                 ip_dict[ip] = []
                             data = json.dumps({'ip':ip })
                             try:
-                                subnet = requests.get('http://127.0.0.1:5000/api/subnets/query_subnet_from_ip/', data=data).text
+                                subnet = requests.get('http://127.0.0.1:5000/query/subnets/query_subnet_from_ip/', data=data).text
                             except ConnectionError as e:
                                 click.secho('Please check cob testserver is running on localhost port 5000', fg='red')
                                 raise click.Abort()
@@ -167,6 +168,86 @@ class Ldap(object):
                 # print(m, mac_dict[m])
         return report_str
 
+    def ymlcomment(self, text):
+        return "#"*10 + "\n# %s\n" % text + "#"*10 + "\n"
+
+    def extract_skeleton(self, rawdata, ofile):
+        """
+        return a dict containing all relevant info about subnets ,groups
+        and also add dhcpranges and calculated ranges.
+        subnets
+        groups
+        pools, dhcp ranges
+        calculated ranges
+        """
+        stream = open(ofile, 'w')
+        stream.write("---\n")
+        groups = ""
+        subnets = ""
+        pools = ""
+        dhcpranges = ""
+        calcranges = ""
+
+        click.secho("Processing raw data and extracting the skeleton")
+        s = dict()
+        p = dict()
+        for e in rawdata:
+           if 'dhcpGroup' in [el.decode('utf-8') for el in e[1]['objectClass']]:
+               name = e[1]['cn'][0].decode('utf-8')
+               url = '/register/groups/'
+               deployed = False
+               groups += yaml.dump([{'url':url, 'data': {'name':name, 'deployed':deployed}}])
+               # click.secho(data, fg='red')
+           elif 'dhcpSubnet' in [el.decode('utf-8') for el in e[1]['objectClass']]:
+               name = e[1]['cn'][0].decode('utf-8')
+               url = '/register/subnets/'
+               deployed = False
+               netmask = e[1]['dhcpNetMask'][0].decode('utf-8')
+               options = {'dhcpComments': [e[1]['dhcpComments'][0].decode('utf-8')]}
+               subnets += yaml.dump([{'url': url, 'data': {'name':name, 'netmask':netmask, 'options':options, 'deployed':deployed}}])
+               s[name] = {'netmask':netmask}
+               # click.secho(data, fg='yellow')
+           elif 'dhcpPool' in [el.decode('utf-8') for el in e[1]['objectClass']]:
+               name = e[1]['cn'][0].decode('utf-8')
+               url = '/register/pools/'
+               deployed = False
+               subnet_name = e[0].replace(",","").split("cn=")[2]
+               pools += yaml.dump([{'url':url, 'data': {'name':name, 'subnet_name':subnet_name, 'deployed':deployed}}])
+               min_dhcprange = e[1]['dhcpRange'][0].split()[0].decode('utf-8')
+               max_dhcprange = e[1]['dhcpRange'][0].split()[1].decode('utf-8')
+               dhcpranges += yaml.dump([{'url':'/register/dhcpranges/', 'data': {'min':min_dhcprange, 'max':max_dhcprange, 'pool_name':name, 'deployed':deployed}}])
+               p[subnet_name] = {'mindhcp':min_dhcprange, 'maxdhcp':max_dhcprange}
+
+        # Calculate and create calcranges yml
+        for sub in s:
+            sname = sub
+            smask = s[sub]['netmask']
+            mind = p[sub]['mindhcp']
+            maxd = p[sub]['maxdhcp']
+            lastip = list(IPv4Network("%s/%s" % (sname,smask)).hosts())[-1]
+            ranges = [[IPv4Address(sname)+1,IPv4Address(mind)-1], [IPv4Address(maxd)+1, lastip]]
+
+            # lower range
+            if ranges[0][1] > ranges[0][0]:
+                #click.echo("create crange for lower")
+                calcranges += yaml.dump([{'url':'/register/calcranges/', 'data': {'subnet_name':sname, 'min':str(ranges[0][0]),'max':str(ranges[0][1]), 'deployed':False}}])
+            # upper range
+            if ranges[1][1] > ranges[1][0]:
+                #click.echo("create crange for upper")
+                calcranges += yaml.dump([{'url':'/register/calcranges/', 'data': {'subnet_name':sname, 'min':str(ranges[1][0]),'max':str(ranges[1][1]), 'deployed':False}}])
+
+
+        stream.write(self.ymlcomment('subnets'))
+        stream.write(subnets)
+        stream.write(self.ymlcomment('pools'))
+        stream.write(pools)
+        stream.write(self.ymlcomment('dhcpranges'))
+        stream.write(dhcpranges)
+        stream.write(self.ymlcomment('calcranges'))
+        stream.write(calcranges)
+        stream.write(self.ymlcomment('groups'))
+        stream.write(groups)
+        stream.write("...")
 
 
 @click.group()
@@ -188,6 +269,8 @@ def yml(ctx, yaml):
     ctx.obj = yaml
 
 
+######## Extracting YAML COPY OF LDAP
+
 @dhcpldap.command()
 @click.option('--elem', default='raw', help='host/system/ip/mac')
 @click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
@@ -207,6 +290,23 @@ def ldap_to_yml(ldaph, lab, elem, raw, quick, ofile, sample):
         f.write(ldaph.process_raw(ldap_raw_data, quick, sample))
         click.secho("Data is ready in %s" % ofile, fg='blue')
 
+####### Extract LDAP Skeleton from raw ldap data
+@dhcpldap.command()
+@click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
+@click.option('--ofile', default='skeleton.yml', help='output file to which ldap data is written')
+@click.pass_obj
+def get_skeleton(ldaph, lab, ofile):
+
+    skeleton = dict()
+    ldaph.connect(lab)
+    click.secho('Retrieving LDAP raw data', fg='green')
+    ldap_raw_data = ldaph.pull_dhcp_data()
+    try:
+        skeleton = ldaph.extract_skeleton(ldap_raw_data, ofile)
+    except Exception as e:
+        raise e
+
+    click.secho('Skeleton is ready in %s' % ofile, fg='blue')
 
 
 ######## YAML SPLITTING
