@@ -182,10 +182,10 @@ class Ldap(object):
                 # print(m, mac_dict[m])
         return report_str
 
-    def write_small_yml(self, fname, info):
+    def write_small_yml(self, fname, odir, info):
 
-        with open(fname, 'w') as fh:
-            click.secho("Creating %s" % fname, fg='blue')
+        with open(odir+"/"+fname, 'w') as fh:
+            # click.secho("Creating %s" % fname, fg='blue')
             fh.write(yaml.dump(info))
 
 
@@ -200,6 +200,8 @@ class Ldap(object):
             click.secho("Loading YAML", fg='green')
             loaded = yaml.load(y)
 
+        click.secho("Will be writing all yml files to %s" % os.path.dirname(ymlfile))
+
         url = loaded[0]['url']
         record_count = 0
         file_count = 0
@@ -212,14 +214,14 @@ class Ldap(object):
             small_yml[0]['data'].update({rec: loaded[0]['data'][rec]})
             if record_count > number:
                 # we get 500 records ,create a file and move to the next one
-                self.write_small_yml("%s%s.yml" % (name, str(file_count)), small_yml)
+                self.write_small_yml("%s%s.yml" % (name, str(file_count)), os.path.dirname(ymlfile), small_yml)
                 small_yml[0]['data'] = {} # clear data part
                 file_count += 1
                 record_count = 0 # start counting all over again
 
         if small_yml[0]['data']:
             # incase we have less then 500 records but we reached the end of the main yml
-            self.write_small_yml("%s%s.yml" % (name, str(file_count)), small_yml)
+            self.write_small_yml("%s%s.yml" % (name, str(file_count)), os.path.dirname(ymlfile), small_yml)
 
     def ymlcomment(self, text):
         return "#"*10 + "\n# %s\n" % text + "#"*10 + "\n"
@@ -355,20 +357,27 @@ def dhcpldap(ctx, username, password):
 ######## Extracting YAML COPY OF LDAP
 
 @dhcpldap.command()
-@click.option('--elem', default='raw', help='host/system/ip/mac')
+# @click.option('--elem', default='raw', help='host/system/ip/mac')
 @click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
 @click.option('--raw/--no-raw', default=False, help='Process data for dhcpawn')
 @click.option('--quick/--no-quick', default=False, help='if used ,a quick copy from ldap to dhcpawn DB is done')
 @click.option('--sample/--no-sample', default=False, help='meant for testing ,will only return 10 records from ldap to see the output is right')
 @click.option('--skeleton/--no-skeleton', default=True, help='By default, LDAP skeleton will also be extracted')
 @click.option('--split/--no-split', default=True, help="By default split LDAP info file to smaller files")
-@click.option('--ofile', help='output file to which ldap data is written')
+@click.option('--ofile', default='commands.yml' , help='output file to which ldap data is written')
+@click.option('--odir', help='output dir')
 @click.pass_obj
-def ldap_to_yml(ldaph, lab, elem, raw, quick, ofile, sample, skeleton, split):
+def ldap_to_yml(ldaph, lab, raw, quick, ofile, odir, sample, skeleton, split):
     click.secho("start %s" % datetime.datetime.ctime(datetime.datetime.now()), fg='yellow')
     if raw and not ofile:
         click.secho("Please also provide an output file ", fg='red')
         raise click.Abort()
+    if not odir or not os.path.exists(odir):
+        click.secho("Please provide a valid output dir", fg='red')
+        raise click.Abort()
+
+    ofile = os.path.abspath(odir) + "/" + ofile
+
     ldaph.connect(lab)
     click.secho('Retrieving LDAP raw data', fg='green')
     ldap_raw_data = ldaph.pull_dhcp_data()
