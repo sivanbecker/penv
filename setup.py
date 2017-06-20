@@ -11,6 +11,7 @@ setup(
         'pyldap',
         'pyyaml',
         'requests',
+        'logbook',
         ],
     entry_points='''
        [console_scripts]
