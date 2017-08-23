@@ -2,7 +2,11 @@ Private ENV CLI (click based):
 -----------------------------
 
 
-To Install package ,please clone it and install from local repo: <pip install -e ...>
+
+To Install package
+~~~~~~~~~~~~~~~~~~
+1. Please clone it: git clone https://github.com/sivanbecker/penv
+2. Install from local repo: <pip install -e ...>
 
 Package includes LDAP and TMUX stuff.  once the package was installed using pip ( package name =
 penv), you can run the next commands:
