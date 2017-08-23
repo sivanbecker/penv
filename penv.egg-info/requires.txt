@@ -1,2 +1,5 @@
 Click
 pyldap
+pyyaml
+requests
+logbook
