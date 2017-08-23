@@ -136,10 +136,10 @@ class Ldap(object):
                             if not ip in ip_dict:
                                 ip_dict[ip] = []
                             data = json.dumps({'ip':ip })
-                            subnet = self.get_subnet_from_ip(IPv4Address(ip), self.skl_subnets_dict)
-                            if not subnet:
-                                continue
-                            # try:
+                            # subnet = self.get_subnet_from_ip(IPv4Address(ip), self.skl_subnets_dict)
+                            # if not subnet:
+                            #     continue
+                            # # try:
                                 # subnet = requests.get('http://127.0.0.1:5000/query/subnets/query_subnet_from_ip/', data=data).text
                             # except ConnectionError as e:
                                 # click.secho('Please check cob testserver is running on localhost port 5000', fg='red')
@@ -149,9 +149,14 @@ class Ldap(object):
                         else:
                             ip = None
                         if ip:
+                            # hosts_str += "h" + str(counter) + ": " + \
+                            #              "{hostname: \"%s\", mac: \"%s\", group: \"%s\", subnet: %s, ip: \"%s\", deployed: %s },\n" \
+                            #              % (hostname, mac, group_name, subnet.strip(), ip, deployed) + " "*9
+
                             hosts_str += "h" + str(counter) + ": " + \
-                                         "{hostname: \"%s\", mac: \"%s\", group: \"%s\", subnet: %s, ip: \"%s\", deployed: %s },\n" \
-                                         % (hostname, mac, group_name, subnet.strip(), ip, deployed) + " "*9
+                                         "{hostname: \"%s\", mac: \"%s\", group: \"%s\", ip: \"%s\", deployed: %s },\n" \
+                                         % (hostname, mac, group_name, ip, deployed) + " "*9
+
 
                             ip_dict[ip].append(hostname)
                             mac_dict[mac].append(hostname)
@@ -171,6 +176,8 @@ class Ldap(object):
         else:
             return cmd_str
 
+#~~~~~~~~~~~ SANITY REPORT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
     def sanity_report(self, data):
 
         report_str = ''
@@ -188,58 +195,7 @@ class Ldap(object):
                 report_str += '%s, %s \n' % (m, mac_dict[m])
                 # print(m, mac_dict[m])
         return report_str
-
-    def write_small_yml(self, fname, odir, info):
-
-        with open(odir+"/"+fname, 'w') as fh:
-            # click.secho("Creating %s" % fname, fg='blue')
-            fh.write(yaml.dump(info))
-
-
-    def split_yml(self, ymlfile, number=500):
-        """
-         split a yaml file into smaller yaml files so that i can
-         populate all ldap records to dockerized dhcpawn
-         number - how many ldap records i would like to have in each yaml file (default = 500 )
-         ymlctx - this is # TODO: he context of the yml click group
-        """
-        with open(ymlfile, 'r') as y:
-            click.secho("Loading YAML", fg='green')
-            loaded = yaml.load(y)
-
-        click.secho("Will be writing all yml files to %s" % os.path.dirname(ymlfile))
-        url = loaded[0]['url']
-        deploy = loaded[0]['data'].get('deploy')
-        record_count = 0
-        file_count = 0
-        name = "ymlcmd"
-        small_yml = [dict()]
-        small_yml[0].setdefault('url', url)
-        small_yml[0].setdefault('data',{})
-        for rec in loaded[0]['data']:
-            if rec == 'deploy':
-                continue
-            record_count += 1
-            small_yml[0]['data'].update({rec: loaded[0]['data'][rec]})
-            if record_count > number:
-                # insert deploy option to each small yml file
-                small_yml[0]['data'].update({'deploy': deploy})
-                # we get 500 records ,create a file and move to the next one
-
-                self.write_small_yml("%s%s.yml" % (name, str(file_count)), os.path.dirname(ymlfile), small_yml)
-                small_yml[0]['data'] = {} # clear data part
-                file_count += 1
-                record_count = 0 # start counting all over again
-
-        if small_yml[0]['data']:
-            # insert deploy option to each small yml file
-            small_yml[0]['data'].update({'deploy': deploy})
-            # incase we have less then 500 records but we reached the end of the main yml
-            self.write_small_yml("%s%s.yml" % (name, str(file_count)), os.path.dirname(ymlfile), small_yml)
-
-    def ymlcomment(self, text):
-        return "#"*10 + "\n# %s\n" % text + "#"*10 + "\n"
-
+#~~~~~~~~~~~~~~~~~~~~~~~~ SKELETON ~~~~~~~~~~~~~~~~~~~~~~~~~~
     def extract_skeleton(self, rawdata=None, ofile=None, deploy=False, fullskl=True):
         """
         return a dict containing all relevant info about subnets ,groups
@@ -281,14 +237,19 @@ class Ldap(object):
                if e[1].get('dhcpOption'):
                    for item in e[1]['dhcpOption']:
                        if item.decode('utf-8').startswith('routers'):
-                           routers = item.decode('utf-8').replace(",","").split(" ")[1:] # taking only the default gateway ip , excluding the "routers" word.
+                           routers = ','.join(item.decode('utf-8').replace(",","").split(" ")[1:]) # taking only the default gateway ip , excluding the "routers" word.
                if e[1].get('dhcpStatements'):
                    for item in e[1]['dhcpStatements']:
                        if item.decode('utf-8').startswith('ddns-domainname'):
                            ddns_domainname = item.decode('utf-8').split()[1].replace("\"","")
 
                # import pudb;pudb.set_trace()
-               options = {'dhcpComments': [e[1]['dhcpComments'][0].decode('utf-8')], 'dhcpRouters': [routers], 'ddns_domainname': [ddns_domainname]}
+               # options = {'dhcpComments': [e[1]['dhcpComments'][0].decode('utf-8')], 'dhcpRouters': [routers], 'ddns-domainname': [ddns_domainname]}
+               options = {
+                   'dhcpComments': [e[1]['dhcpComments'][0].decode('utf-8')],
+                   'dhcpStatements': ['ddns-domainname %s' % ddns_domainname],
+                   'dhcpOption': ['routers %s' % routers]
+               }
                subnets += yaml.dump([{'url': url, 'data': {'name':name, 'netmask':netmask, 'options':options, 'deployed':deploy}}])
                s[name] = {'netmask':netmask}
                # click.secho(data, fg='yellow')
@@ -345,9 +306,62 @@ class Ldap(object):
         """
         for s in skldict:
             if ip in skldict[s]:
+                # click.secho("%s in %s" % (ip, s), fg='red')
                 return s
-
+        # click.secho("no subnet found for ip %s" % ip, fg='yellow')
         return None
+
+#~~~~~~~~~~~~~~~~~~~~~~~ SPLIT STUFF ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    def write_small_yml(self, fname, odir, info):
+
+        with open(odir+"/"+fname, 'w') as fh:
+            # click.secho("Creating %s" % fname, fg='blue')
+            fh.write(yaml.dump(info))
+
+
+    def split_yml(self, ymlfile, number=500):
+        """
+         split a yaml file into smaller yaml files so that i can
+         populate all ldap records to dockerized dhcpawn
+         number - how many ldap records i would like to have in each yaml file (default = 500 )
+         ymlctx - this is # TODO: he context of the yml click group
+        """
+        with open(ymlfile, 'r') as y:
+            click.secho("Loading YAML", fg='green')
+            loaded = yaml.load(y)
+
+        click.secho("Will be writing all yml files to %s" % os.path.dirname(ymlfile))
+        url = loaded[0]['url']
+        deploy = loaded[0]['data'].get('deploy')
+        record_count = 0
+        file_count = 0
+        name = "ymlcmd"
+        small_yml = [dict()]
+        small_yml[0].setdefault('url', url)
+        small_yml[0].setdefault('data',{})
+        for rec in loaded[0]['data']:
+            if rec == 'deploy':
+                continue
+            record_count += 1
+            small_yml[0]['data'].update({rec: loaded[0]['data'][rec]})
+            if record_count > number:
+                # insert deploy option to each small yml file
+                small_yml[0]['data'].update({'deploy': deploy})
+                # we get 500 records ,create a file and move to the next one
+
+                self.write_small_yml("%s%s.yml" % (name, str(file_count)), os.path.dirname(ymlfile), small_yml)
+                small_yml[0]['data'] = {} # clear data part
+                file_count += 1
+                record_count = 0 # start counting all over again
+
+        if small_yml[0]['data']:
+            # insert deploy option to each small yml file
+            small_yml[0]['data'].update({'deploy': deploy})
+            # incase we have less then 500 records but we reached the end of the main yml
+            self.write_small_yml("%s%s.yml" % (name, str(file_count)), os.path.dirname(ymlfile), small_yml)
+
+    def ymlcomment(self, text):
+        return "#"*10 + "\n# %s\n" % text + "#"*10 + "\n"
 
 ######################################################################
 
@@ -376,7 +390,7 @@ def dhcpldap(ctx, username, password):
 # @click.option('--elem', default='raw', help='host/system/ip/mac')
 @click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
 @click.option('--raw/--no-raw', default=False, help='Process data for dhcpawn')
-# @click.option('--quick/--no-quick', default=True, help='if used ,a quick copy from ldap to dhcpawn DB is done')
+# # @click.option('--quick/--no-quick', default=True, help='if used ,a quick copy from ldap to dhcpawn DB is done')
 @click.option('--deploy/--no-deploy', default=False, help='deploy to LDAP or not. default is False')
 @click.option('--sample/--no-sample', default=False, help='meant for testing ,will only return 10 records from ldap to see the output is right')
 @click.option('--skeleton/--no-skeleton', default=True, help='By default, LDAP skeleton will also be extracted')
@@ -398,13 +412,12 @@ def ldap_to_yml(ldaph, lab, raw, deploy, ofile, odir, sample, skeleton, split):
     ldaph.connect(lab)
     click.secho('Retrieving LDAP raw data', fg='green')
     ldap_raw_data = ldaph.pull_dhcp_data()
-    click.echo("deploy is %s" % deploy)
+    # click.echo("deploy is %s" % deploy)
     if skeleton:
         skeleton_file = os.path.dirname(os.path.abspath(ofile))+"/"+"skeleton.yml"
         click.secho('Extracting Skeleton', fg='blue')
-        skeleton = ldaph.extract_skeleton(rawdata=ldap_raw_data, ofile=skeleton_file, deploy=deploy , fullskl=False)
+        skeleton = ldaph.extract_skeleton(rawdata=ldap_raw_data, ofile=skeleton_file, deploy=deploy , fullskl=True)
         click.secho('Skeleton is ready in %s' % skeleton_file , fg='blue')
-    click.Abort("stop")
 
     with open(ofile, 'w') as f:
 
