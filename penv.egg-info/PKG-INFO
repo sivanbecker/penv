@@ -1,10 +1,11 @@
 Metadata-Version: 1.0
 Name: penv
-Version: 0.0.4
-Summary: UNKNOWN
+Version: 0.0.5
+Summary: dhcp, ldap stuff
 Home-page: UNKNOWN
-Author: UNKNOWN
-Author-email: UNKNOWN
-License: UNKNOWN
+Author: Sivan Becker
+Author-email: sivanbecker@gmail.com
+License: BSD
 Description: UNKNOWN
+Keywords: dhcp ldap
 Platform: UNKNOWN

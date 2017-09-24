@@ -4,7 +4,12 @@ from setuptools import setup
 
 setup(
     name='penv',
-    version='0.0.4',
+    version = '0.0.5',
+    author = 'Sivan Becker',
+    author_email = 'sivanbecker@gmail.com',
+    description = ("dhcp, ldap stuff"),
+    license = "BSD",
+    keywords = "dhcp ldap",
     pymodules=['penv'],
     install_requires=[
         'Click',
