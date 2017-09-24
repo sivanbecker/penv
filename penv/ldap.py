@@ -367,7 +367,7 @@ class Ldap(object):
 
 @click.group()
 @click.option('-u', '--username', help='username for LDAP access', required=True)
-@click.option('-p', '--password', help='password for LDAP access', required=True)
+@click.option('-p', '--password', prompt=True, hide_input=True, help='password for LDAP access', required=True)
 @click.pass_context
 def dhcpldap(ctx, username, password):
 
@@ -432,7 +432,7 @@ def ldap_to_yml(ldaph, lab, raw, deploy, ofile, odir, sample, skeleton, split):
     click.secho("End %s" % datetime.datetime.ctime(datetime.datetime.now()), fg='yellow')
 ####### Extract LDAP Skeleton from raw ldap data
 @dhcpldap.command()
-@click.option('--lab', default='infi1', help='Infi1 / telad / gdc /')
+@click.option('--lab', default='infi1', help='Infi1 (default) / telad / gdc /')
 @click.option('--ofile', default='skeleton.yml', help='output file to which ldap data is written')
 @click.option('--deployed', default=False, help='will be pushed to LDAP or just to DB')
 @click.pass_obj
@@ -443,7 +443,7 @@ def get_skeleton(ldaph, lab, ofile, deployed):
     click.secho('Retrieving LDAP raw data', fg='green')
     ldap_raw_data = ldaph.pull_dhcp_data()
     try:
-        skeleton = ldaph.extract_skeleton(rawdata=ldap_raw_data, ofile=ofile, deployed=False)
+        skeleton = ldaph.extract_skeleton(rawdata=ldap_raw_data, ofile=ofile)
     except Exception as e:
         raise e
 
