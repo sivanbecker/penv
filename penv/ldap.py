@@ -396,9 +396,13 @@ def dhcpldap(ctx, username, password):
 @click.option('--skeleton/--no-skeleton', default=True, help='By default, LDAP skeleton will also be extracted')
 @click.option('--split/--no-split', default=True, help="By default split LDAP info file to smaller files")
 @click.option('--ofile', default='commands.yml' , help='output file to which ldap data is written')
-@click.option('--odir', help='output dir')
+@click.option('--odir', default='.', help='output dir')
 @click.pass_obj
 def ldap_to_yml(ldaph, lab, raw, deploy, ofile, odir, sample, skeleton, split):
+    '''
+    bring ldap data by default to a file called commands.yml.
+    by default also split to smaller yml files.
+    '''
     click.secho("start %s" % datetime.datetime.ctime(datetime.datetime.now()), fg='yellow')
     if raw and not ofile:
         click.secho("Please also provide an output file ", fg='red')
