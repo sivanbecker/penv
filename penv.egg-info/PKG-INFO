@@ -1,7 +1,7 @@
 Metadata-Version: 1.0
 Name: penv
-Version: 0.0.5
-Summary: dhcp, ldap stuff
+Version: 0.0.6
+Summary: dhcp/ldap stuff, dhcpawn populate
 Home-page: UNKNOWN
 Author: Sivan Becker
 Author-email: sivanbecker@gmail.com
