@@ -98,16 +98,12 @@ class Ldap(object):
         if not deploy:
             # dont deploy to LDAP
             deployed = False
-            # cmd_str = "- url: /rest/multiple_register/\n"+" "*2 +"data: " + \
-                      # " " +"{\n" + " "*8 + "\"deploy\": \"False\",\n" + " "*8 + \
-                      # "\"quick\": \"True\",\n"
-            cmd_str = "- url: /rest/multiple_register/\n"+" "*2 +"data: " + \
+            cmd_str = "- url: /rest/multiple/\n"+" "*2 +"data: " + \
                       " " +"{\n" + " "*8 + "\"deploy\": \"False\",\n" + " "*8
         else:
             # deploy to LDAP
             deployed = True
-            # cmd_str = "- url: /rest/multiple_register/\n"+" "*2 +"data: " + " " +"{\n" + "\"quick\": \"False\",\n"
-            cmd_str = "- url: /rest/multiple_register/\n"+" "*2 +"data: " + " " +"{\n" + "\"deploy\": \"True\",\n"
+            cmd_str = "- url: /rest/multiple/\n"+" "*2 +"data: " + " " +"{\n" + "\"deploy\": \"True\",\n"
 
         mac_dict = dict()
         ip_dict = dict()
@@ -376,7 +372,9 @@ def dhcpldap(ctx, username, password):
     ctx.obj.password = password
     # ctx.obj.connect(lab)
 
-
+@click.group()
+def dhcpawn():
+    pass
 # @click.group()
 # @click.option('-y','--yaml', help='path to YAML file')
 # @click.pass_context
@@ -569,3 +567,55 @@ def ldap_search(ldaph, st, lab):
             break
         for component in dhcp_dict[l]:
             print("(%s) %s -> %s" % (l, component, dhcp_dict[l][component]))
+
+
+##### POPULATE LDAP INFO YML FILES TO DHCPAWN DB /  LDAP
+def populate_single_file(host, port, filename):
+    if not filename.endswith('yml'):
+        return
+    with open(filename, 'r') as f:
+        click.secho('Loading YML %s' % filename, fg='blue')
+        cmnds = yaml.load(f)
+        click.secho('Finished Loading YML', fg='blue')
+    for command in cmnds:
+        try:
+            url = 'http://%s:%s%s' % (host, port, command['url'])
+            re = requests.post(url, data=json.dumps(command['data']))
+        except Exception as e:
+            click.secho(e, fg='red')
+            raise click.Abort()
+
+        if not re.status_code == 200 or "Registration Failed" in re.text:
+            click.secho("%s : %s" % (re.status_code, re.text), fg='blue')
+
+def populate_batch(host, port, folder, filename):
+    # when batch is used i assume filename is a string
+    # like ymlcmd with which i can find all relelvant yml
+    # files in folder. folder must be used when batch is used.
+    for f in os.listdir(folder):
+        if f.startswith(filename):
+            curfile = folder + "/" + f
+            populate_single_file(host,port,curfile)
+
+@dhcpawn.command()
+@click.option("--host", help="Host running DHCPawn", default="localhost")
+@click.option("--port", help="Port on host running DHCPawn", default=8000)
+@click.option("--filename", default='ymlcmd', help="YAML file containing population calls, like sample_data.yml")
+@click.option('--batch/--no-batch', default=False, help='in case we have several yml files to populate')
+@click.option('--folder', help='if batch used ,give directory where all yml files exist')
+@click.option('--full/--no-full', default=False , help='populate skeleton and all LDAP entries')
+def populate(host, port, filename, batch, folder, full):
+
+    if batch and (not folder or not filename):
+        click.secho("When using batch , you must give folder and filename", fg='red')
+        raise click.Abort()
+
+    if full:
+        populate_single_file(host, port, os.path.abspath(folder) + "/" + 'skeleton.yml')
+        populate_batch(host, port, folder, filename)
+    elif batch:
+        click.secho("Populating to %s:%s" % (host,port), fg='yellow')
+        populate_batch(host, port, folder, filename)
+    else:
+        click.secho("Populating to %s:%s" % (host,port), fg='yellow')
+        populate_single_file(host, port, filename)

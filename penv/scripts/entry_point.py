@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python
 
 import click
 import logbook
@@ -16,15 +16,15 @@ def cli(ctx):
 def tmux():
     pass
 
-# @cli.group()
-# def yml():
-#     pass
+@cli.group()
+def dhcpawn():
+    pass
 
 from ..ldap import dhcpldap as ldap_group
 cli.add_command(ldap_group)
 
-# from ..ldap import yml as yml_group
-# cli.add_command(yml_group)
+from ..ldap import dhcpawn as dhcpawn_group
+cli.add_command(dhcpawn_group)
 
 def main_entry_point():
     _log_handler = logbook.StderrHandler()
