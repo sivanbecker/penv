@@ -11,6 +11,7 @@ setup(
     license = "BSD",
     keywords = "dhcp ldap",
     packages=['penv'],
+    py_modules = ['penv'],
     install_requires=[
         'Click',
         'pyldap',
