@@ -1,3 +1,4 @@
+README.md
 penv.egg-info/PKG-INFO
 penv.egg-info/SOURCES.txt
 penv.egg-info/dependency_links.txt
