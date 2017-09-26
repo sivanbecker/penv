@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='penv',
@@ -19,7 +19,7 @@ setup(
         'logbook',
         ],
     entry_points = {
-        'console_scripts': ['p=penv.penv.scripts.entry_point:cli']
+        'console_scripts': ['p=penv.scripts.entry_point:cli']
         }
     # entry_points='''
        # [console_scripts]
