@@ -11,7 +11,6 @@ setup(
     license = "BSD",
     keywords = "dhcp ldap",
     packages=['penv'],
-    py_modules = ['penv'],
     install_requires=[
         'Click',
         'pyldap',
@@ -20,7 +19,7 @@ setup(
         'logbook',
         ],
     entry_points = {
-        'console_scripts': ['p=penv.scripts.entry_point:cli']
+        'console_scripts': ['p=scripts.entry_point:cli']
         }
     # entry_points='''
        # [console_scripts]
