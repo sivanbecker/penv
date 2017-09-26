@@ -10,7 +10,7 @@ setup(
     description = ("dhcp/ldap stuff, dhcpawn populate"),
     license = "BSD",
     keywords = "dhcp ldap",
-    packages=['penv'],
+    packages=find_packages(),
     install_requires=[
         'Click',
         'pyldap',
