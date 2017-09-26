@@ -18,8 +18,11 @@ setup(
         'requests',
         'logbook',
         ],
-    entry_points='''
-       [console_scripts]
-       p=penv.scripts.entry_point:cli
-    ''',
+    entry_points = {
+        'console_scripts': ['p=penv.scripts.entry_point:cli']
+        }
+    # entry_points='''
+       # [console_scripts]
+       # p=penv.scripts.entry_point:cli
+    # ''',
 )
